@@ -25,9 +25,11 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  shared_preferences: ^2.0.6
+  flutter_native_splash: ^2.0.5+1
 
   # Add the flutter_lints package for analysis.
-  flutter_lints: ^2.0.1
+  flutter_lints: ^4.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

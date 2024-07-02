@@ -1,41 +1,17 @@
 class Course {
-  String name;
-  int credits;
-  String grade;
+  final String name;
+  final double units;
+  final double grade;
 
-  Course({required this.name, required this.credits, required this.grade});
+  Course(this.name, this.units, this.grade);
 
-  Map<String, dynamic> toMap() {
-    return {
-      'name': name,
-      'credits': credits,
-      'grade': grade,
-    };
+  @override
+  String toString() {
+    return '$name,$units,$grade';
   }
 
-  factory Course.fromMap(Map<String, dynamic> map) {
-    return Course(
-      name: map['name'],
-      credits: map['credits'],
-      grade: map['grade'],
-    );
-  }
-
-  double get gradePoint {
-    switch (grade) {
-      case 'A':
-        return 5.0;
-      case 'B':
-        return 4.0;
-      case 'C':
-        return 3.0;
-      case 'D':
-        return 2.0;
-      case 'E':
-        return 1.0;
-      case 'F':
-      default:
-        return 0.0;
-    }
+  static Course fromString(String courseString) {
+    final parts = courseString.split(',');
+    return Course(parts[0], double.parse(parts[1]), double.parse(parts[2]));
   }
 }

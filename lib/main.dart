@@ -1,263 +1,249 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-import 'models/course.dart';
+import 'models/course.dart'; // Importing the Course class
 
 void main() {
-  runApp(GPACalculatorApp());
+  runApp(const MyApp());
 }
 
-class GPACalculatorApp extends StatelessWidget {
+class MyApp extends StatelessWidget {
+  const MyApp({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      home: GPACalculator(),
+      title: 'GPA Calculator',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      home: const MyHomePage(),
     );
   }
 }
 
-class GPACalculator extends StatefulWidget {
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({Key? key}) : super(key: key);
+
   @override
-  _GPACalculatorState createState() => _GPACalculatorState();
+  _MyHomePageState createState() => _MyHomePageState();
 }
 
-class _GPACalculatorState extends State<GPACalculator> {
+class _MyHomePageState extends State<MyHomePage> {
   List<Course> courses = [];
-  TextEditingController nameController = TextEditingController();
-  TextEditingController creditsController = TextEditingController();
-  String selectedGrade = 'A';
-  String selectedSortOption = 'Name';
+  double gpa = 0.0;
 
   @override
   void initState() {
     super.initState();
-    loadCourses();
+    _loadCourses();
   }
 
-  void saveCourses() async {
+  void _loadCourses() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    List<String> coursesString =
-        courses.map((course) => json.encode(course.toMap())).toList();
-    prefs.setStringList('courses', coursesString);
-  }
-
-  void loadCourses() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    List<String>? coursesString = prefs.getStringList('courses');
-    if (coursesString != null) {
-      setState(() {
-        courses = coursesString
-            .map((courseStr) => Course.fromMap(json.decode(courseStr)))
-            .toList();
-      });
-    }
-  }
-
-  void addCourse() {
-    if (nameController.text.isEmpty ||
-        creditsController.text.isEmpty ||
-        !['A', 'B', 'C', 'D', 'E', 'F'].contains(selectedGrade)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Please fill all fields with valid data.')),
-      );
-      return;
-    }
-
     setState(() {
-      courses.add(Course(
-        name: nameController.text,
-        credits: int.parse(creditsController.text),
-        grade: selectedGrade,
-      ));
-      nameController.clear();
-      creditsController.clear();
-      saveCourses();
+      courses = (prefs.getStringList('courses') ?? [])
+          .map((course) => Course.fromString(course))
+          .toList();
+      _calculateGPA();
     });
   }
 
-  void editCourse(int index) {
-    Course course = courses[index];
-    nameController.text = course.name;
-    creditsController.text = course.credits.toString();
-    selectedGrade = course.grade;
+  void _saveCourses() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    prefs.setStringList('courses', courses.map((course) => course.toString()).toList());
+  }
 
+  void _calculateGPA() {
+    if (courses.isEmpty) {
+      setState(() {
+        gpa = 0.0;
+      });
+      return;
+    }
+
+    double totalPoints = 0.0;
+    double totalUnits = 0.0;
+    for (var course in courses) {
+      totalPoints += course.grade * course.units;
+      totalUnits += course.units;
+    }
+
+    setState(() {
+      gpa = totalPoints / totalUnits;
+    });
+  }
+
+  void _addCourse() {
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text('Edit Course'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                decoration: InputDecoration(labelText: 'Course Name'),
-              ),
-              TextField(
-                controller: creditsController,
-                decoration: InputDecoration(labelText: 'Credits'),
-                keyboardType: TextInputType.number,
-              ),
-              DropdownButton<String>(
-                value: selectedGrade,
-                onChanged: (String? newValue) {
-                  setState(() {
-                    selectedGrade = newValue!;
-                  });
-                },
-                items: <String>['A', 'B', 'C', 'D', 'E', 'F']
-                    .map<DropdownMenuItem<String>>((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-              ),
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  courses[index] = Course(
-                    name: nameController.text,
-                    credits: int.parse(creditsController.text),
-                    grade: selectedGrade,
-                  );
-                  saveCourses();
-                });
-                Navigator.of(context).pop();
-              },
-              child: Text('Save'),
-            ),
-          ],
+        return AddCourseDialog(
+          onAdd: (course) {
+            setState(() {
+              courses.add(course);
+              _calculateGPA();
+              _saveCourses();
+            });
+          },
         );
       },
     );
   }
 
-  void deleteCourse(int index) {
+  void _deleteCourse(int index) {
     setState(() {
       courses.removeAt(index);
-      saveCourses();
+      _calculateGPA();
+      _saveCourses();
     });
-  }
-
-  void sortCourses() {
-    setState(() {
-      if (selectedSortOption == 'Name') {
-        courses.sort((a, b) => a.name.compareTo(b.name));
-      } else if (selectedSortOption == 'Credits') {
-        courses.sort((a, b) => a.credits.compareTo(b.credits));
-      } else if (selectedSortOption == 'Grade') {
-        courses.sort((a, b) => a.grade.compareTo(b.grade));
-      }
-    });
-  }
-
-  double calculateGPA() {
-    double totalPoints = 0;
-    int totalCredits = 0;
-    for (var course in courses) {
-      totalPoints += course.gradePoint * course.credits;
-      totalCredits += course.credits;
-    }
-    return totalCredits == 0 ? 0 : totalPoints / totalCredits;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('GPA Calculator'),
-        actions: [
-          DropdownButton<String>(
-            value: selectedSortOption,
-            onChanged: (String? newValue) {
-              setState(() {
-                selectedSortOption = newValue!;
-                sortCourses();
-              });
-            },
-            items: <String>['Name', 'Credits', 'Grade']
-                .map<DropdownMenuItem<String>>((String value) {
-              return DropdownMenuItem<String>(
-                value: value,
-                child: Text(value),
-              );
-            }).toList(),
-          ),
-        ],
+        title: const Text('GPA Calculator'),
       ),
       body: Column(
         children: [
           Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Column(
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: InputDecoration(labelText: 'Course Name'),
-                ),
-                TextField(
-                  controller: creditsController,
-                  decoration: InputDecoration(labelText: 'Credits'),
-                  keyboardType: TextInputType.number,
-                ),
-                DropdownButton<String>(
-                  value: selectedGrade,
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      selectedGrade = newValue!;
-                    });
-                  },
-                  items: <String>['A', 'B', 'C', 'D', 'E', 'F']
-                      .map<DropdownMenuItem<String>>((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-                ),
-                SizedBox(height: 10),
-                ElevatedButton(
-                  onPressed: addCourse,
-                  child: Text('Add Course'),
-                ),
-              ],
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+              'Current GPA: ${gpa.toStringAsFixed(2)}',
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
           ),
           Expanded(
             child: ListView.builder(
               itemCount: courses.length,
               itemBuilder: (context, index) {
+                final course = courses[index];
                 return ListTile(
-                  title: Text(
-                      '${courses[index].name} - ${courses[index].credits} credits'),
-                  subtitle: Text('Grade: ${courses[index].grade}'),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: Icon(Icons.edit),
-                        onPressed: () => editCourse(index),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.delete),
-                        onPressed: () => deleteCourse(index),
-                      ),
-                    ],
+                  title: Text('${course.name} (${course.units} units)'),
+                  subtitle: Text('Grade: ${course.grade}'),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete),
+                    onPressed: () => _deleteCourse(index),
                   ),
                 );
               },
             ),
           ),
           Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Text('GPA: ${calculateGPA().toStringAsFixed(2)}'),
+            padding: const EdgeInsets.all(16.0),
+            child: ElevatedButton(
+              onPressed: _addCourse,
+              child: const Text('Add Course'),
+            ),
           ),
+          const SizedBox(height: 16),
+          const Text(
+            'Made by Badmus Qudus Ayomide',
+            style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
+          ),
+          const SizedBox(height: 16),
         ],
       ),
+    );
+  }
+}
+
+class AddCourseDialog extends StatefulWidget {
+  final void Function(Course) onAdd;
+
+  const AddCourseDialog({Key? key, required this.onAdd}) : super(key: key);
+
+  @override
+  _AddCourseDialogState createState() => _AddCourseDialogState();
+}
+
+class _AddCourseDialogState extends State<AddCourseDialog> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _unitsController = TextEditingController();
+  String? _selectedGrade;
+
+  final Map<String, double> _grades = {
+    'A': 5.0,
+    'B': 4.0,
+    'C': 3.0,
+    'D': 2.0,
+    'E': 1.0,
+    'F': 0.0,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add Course'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Course Name'),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter a course name';
+                }
+                return null;
+              },
+            ),
+            TextFormField(
+              controller: _unitsController,
+              decoration: const InputDecoration(labelText: 'Units'),
+              keyboardType: TextInputType.number,
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please enter the number of units';
+                }
+                if (double.tryParse(value) == null) {
+                  return 'Please enter a valid number';
+                }
+                return null;
+              },
+            ),
+            DropdownButtonFormField<String>(
+              value: _selectedGrade,
+              decoration: const InputDecoration(labelText: 'Grade'),
+              items: _grades.keys
+                  .map((grade) => DropdownMenuItem(
+                value: grade,
+                child: Text(grade),
+              ))
+                  .toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedGrade = value;
+                });
+              },
+              validator: (value) {
+                if (value == null) {
+                  return 'Please select a grade';
+                }
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            if (_formKey.currentState!.validate()) {
+              final name = _nameController.text;
+              final units = double.parse(_unitsController.text);
+              final grade = _grades[_selectedGrade]!;
+              final course = Course(name, units, grade);
+              widget.onAdd(course);
+              Navigator.of(context).pop();
+            }
+          },
+          child: const Text('Add'),
+        ),
+      ],
     );
   }
 }
